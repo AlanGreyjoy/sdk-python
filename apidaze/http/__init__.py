@@ -1,5 +1,5 @@
 from enum import Enum
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode
 import json
 import urllib3
 import certifi
@@ -19,7 +19,7 @@ class HTTPResponse(urllib3.HTTPResponse):
 
     @property
     def text(self):
-        return self.data.decode('utf-8') if self.data else ''
+        return self.data.decode("utf-8") if self.data else ""
 
 
 class HttpMethodEnum(Enum):
@@ -36,58 +36,51 @@ class Http(object):
         self.api_secret = api_secret
 
         if not self.api_key or not self.api_secret:
-            raise ValueError('api_key and api_secret must be provided')
+            raise ValueError("api_key and api_secret must be provided")
 
-        self.base_url = self.__concatenate_url(
-                                api_url,
-                                api_key)
+        self.base_url = self.__concatenate_url(api_url, api_key)
 
     def request(
-            self,
-            method: HttpMethodEnum,
-            endpoint: str,
-            payload: dict,
-            headers: dict = {},
-            params: dict = {}):
+        self,
+        method: HttpMethodEnum,
+        endpoint: str,
+        payload: dict,
+        headers: dict = {},
+        params: dict = {},
+    ):
         if not isinstance(method, Enum):
-            raise TypeError(
-                'method must be an instance of HttpMethodEnum Enum')
+            raise TypeError("method must be an instance of HttpMethodEnum Enum")
 
-        local_params = {'api_secret': self.api_secret}
-
+        params["api_secret"] = self.api_secret
         url = self.__concatenate_url(self.base_url, endpoint)
 
-        if not self.__is_url_valid(url):
-            raise ValueError('URL is invalid')
-
-        headers = self.getHeadersWithDefault(headers=headers)
-        response = None
-
-        if params:
-            local_params.update(params)
+        query_string = urlencode(params)
+        url = f"{url}?{query_string}"
 
         if payload:
-            local_params.update(payload)
+            encoded_payload = urlencode(payload)
+            headers = self.getHeadersWithDefault(headers=headers)
+        else:
+            encoded_payload = None
 
-        http = urllib3.PoolManager(cert_reqs='CERT_REQUIRED',
-                                   ca_certs=certifi.where(), num_pools=2)
+        http = urllib3.PoolManager(
+            cert_reqs="CERT_REQUIRED", ca_certs=certifi.where(), num_pools=2
+        )
+
         response = http.request(
-            method.value,
-            url,
-            fields=local_params,
-            headers=headers
-            )
+            method.value, url, body=encoded_payload, headers=headers
+        )
 
-        return HTTPResponse(body=response.data,
-                            headers=response.headers,
-                            status=response.status,
-                            reason=response.reason,
-                            msg=response.msg)
+        return HTTPResponse(
+            body=response.data,
+            headers=response.headers,
+            status=response.status,
+            reason=response.reason,
+            msg=response.msg,
+        )
 
     def getHeadersWithDefault(self, headers={}):
-        default = {
-            'content-type': 'application/x-www-form-urlencoded'
-        }
+        default = {"content-type": "application/x-www-form-urlencoded"}
 
         default.update(headers)
 
